@@ -1,0 +1,33 @@
+<div class="profile-container">
+  <div *ngIf="loading" class="loading">Loading...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+  <div *ngIf="profile && !loading" class="profile-content">
+    <div class="profile-header">
+      <h1>{{ profile.name }}</h1>
+      <p class="title">{{ profile.title }}</p>
+    </div>
+
+    <div class="profile-bio">
+      <p>{{ profile.bio }}</p>
+    </div>
+
+    <div class="profile-info">
+      <div class="info-item">
+        <strong>Email:</strong> <a [href]="'mailto:' + profile.email">{{ profile.email }}</a>
+      </div>
+    </div>
+
+    <div class="skills-section">
+      <h2>Skills</h2>
+      <div class="skills-list">
+        <span *ngFor="let skill of profile.skills" class="skill-tag">{{ skill }}</span>
+      </div>
+    </div>
+
+    <div class="social-links">
+      <h2>Connect</h2>
+      <a [href]="profile.github" target="_blank" class="social-link">GitHub</a>
+      <a [href]="profile.linkedin" target="_blank" class="social-link">LinkedIn</a>
+    </div>
+  </div>
+</div>

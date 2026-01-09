@@ -1,0 +1,18 @@
+<div class="navbar">
+  <div class="nav-container">
+    <h1 class="logo">{{ title }}</h1>
+    <nav>
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Home</a>
+      <a routerLink="/profile" routerLinkActive="active">Profile</a>
+      <a routerLink="/blogs" routerLinkActive="active">Blogs</a>
+    </nav>
+  </div>
+</div>
+
+<main class="main-content">
+  <router-outlet></router-outlet>
+</main>
+
+<footer class="footer">
+  <p>&copy; 2026 My Portfolio. All rights reserved.</p>
+</footer>

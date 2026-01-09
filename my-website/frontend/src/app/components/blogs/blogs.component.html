@@ -1,0 +1,32 @@
+<div class="blogs-container">
+  <h1>Blog Posts</h1>
+
+  <div *ngIf="loading" class="loading">Loading blogs...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <div *ngIf="!loading && blogs.length === 0" class="no-blogs">
+    <p>No blog posts available yet.</p>
+  </div>
+
+  <div *ngIf="!loading && blogs.length > 0" class="blogs-grid">
+    <article *ngFor="let blog of blogs" class="blog-card">
+      <div class="blog-header">
+        <h2>
+          <a [routerLink]="['/blog', blog.id]">{{ blog.title }}</a>
+        </h2>
+        <div class="blog-meta">
+          <span class="author">By {{ blog.author }}</span>
+          <span class="date">{{ blog.date }}</span>
+        </div>
+      </div>
+
+      <p class="blog-content">{{ blog.content }}</p>
+
+      <div class="blog-tags">
+        <span *ngFor="let tag of blog.tags" class="tag">{{ tag }}</span>
+      </div>
+
+      <a [routerLink]="['/blog', blog.id]" class="read-more">Read More →</a>
+    </article>
+  </div>
+</div>

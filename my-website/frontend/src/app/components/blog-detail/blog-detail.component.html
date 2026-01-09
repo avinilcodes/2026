@@ -1,0 +1,24 @@
+<div class="blog-detail-container">
+  <a routerLink="/blogs" class="back-link">← Back to Blogs</a>
+
+  <div *ngIf="loading" class="loading">Loading blog...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+
+  <article *ngIf="blog && !loading" class="blog-detail">
+    <header class="blog-header">
+      <h1>{{ blog.title }}</h1>
+      <div class="blog-meta">
+        <span class="author">By {{ blog.author }}</span>
+        <span class="date">{{ blog.date }}</span>
+      </div>
+    </header>
+
+    <div class="blog-tags">
+      <span *ngFor="let tag of blog.tags" class="tag">{{ tag }}</span>
+    </div>
+
+    <div class="blog-body">
+      {{ blog.content }}
+    </div>
+  </article>
+</div>

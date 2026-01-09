@@ -1,0 +1,42 @@
+.home-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.loading {
+  text-align: center;
+  font-size: 18px;
+  color: #666;
+}
+
+.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 12px 20px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.home-content {
+  text-align: center;
+}
+
+.home-content h1 {
+  font-size: 3em;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.home-content p {
+  font-size: 1.2em;
+  color: #666;
+  line-height: 1.6;
+}
+
+.welcome-name {
+  font-size: 1.5em;
+  color: #007bff;
+  margin-top: 20px;
+  font-weight: bold;
+}

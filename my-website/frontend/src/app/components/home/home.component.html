@@ -1,0 +1,9 @@
+<div class="home-container">
+  <div *ngIf="loading" class="loading">Loading...</div>
+  <div *ngIf="error" class="error">{{ error }}</div>
+  <div *ngIf="homeData && !loading" class="home-content">
+    <h1>{{ homeData.title }}</h1>
+    <p>{{ homeData.description }}</p>
+    <p class="welcome-name">Welcome, {{ homeData.name }}</p>
+  </div>
+</div>
