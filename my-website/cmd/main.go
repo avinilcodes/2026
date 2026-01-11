@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
+	"time"
 
 	"my-website/handler"
 
@@ -22,6 +28,9 @@ var (
 	profileService *service.ProfileService
 	homeService    *service.HomeService
 )
+
+// shared limiter for the server
+var limiter = rate.NewLimiter(5, 10)
 
 func init() {
 	blogService = service.NewBlogService()
@@ -51,22 +60,64 @@ func main() {
 
 	handler := c.Handler(router)
 
-	fmt.Println("Server starting on :8080...")
-	log.Fatal(http.ListenAndServe(":8080", handler))
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: handler,
+	}
+
+	// use signal.NotifyContext to listen for interrupt/terminate signals
+	sigCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		fmt.Println("Server starting on :8080...")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %v", err)
+		}
+	}()
+
+	// wait for shutdown signal
+	<-sigCtx.Done()
+	// allow 15s to finish ongoing requests and drain workers
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	fmt.Println("Shutting down server...")
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("server shutdown error: %v", err)
+	}
+
+	// stop the worker pool, give it the same timeout
+	if err := service.ShutdownWorkerPool(shutdownCtx); err != nil {
+		log.Printf("worker pool shutdown error: %v", err)
+	}
+
+	fmt.Println("Server gracefully stopped")
 }
 
 // getHome returns home page data
 func getHome(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	limiter := rate.NewLimiter(5, 10)
+	// create per-request timeout and derived context
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	if err := limiter.Wait(ctx); err != nil {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		handler.WriteError(w, http.StatusTooManyRequests, "Too many requests")
 		return
 	}
+
 	home, err := homeService.GetHomeData(ctx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			handler.WriteError(w, http.StatusGatewayTimeout, "request timed out")
+			return
+		}
+		if errors.Is(err, context.Canceled) {
+			// client cancelled
+			w.WriteHeader(499)
+			handler.WriteError(w, 499, "client canceled request")
+			return
+		}
 		handler.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -81,17 +132,25 @@ func getHome(w http.ResponseWriter, r *http.Request) {
 
 // getProfile returns profile information
 func getProfile(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	limiter := rate.NewLimiter(5, 10)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	if err := limiter.Wait(ctx); err != nil {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		handler.WriteError(w, http.StatusTooManyRequests, "Too many requests")
 		return
 	}
 
 	profile, err := profileService.GetProfile(ctx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			handler.WriteError(w, http.StatusGatewayTimeout, "request timed out")
+			return
+		}
+		if errors.Is(err, context.Canceled) {
+			w.WriteHeader(499)
+			handler.WriteError(w, 499, "client canceled request")
+			return
+		}
 		handler.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -110,16 +169,25 @@ func getProfile(w http.ResponseWriter, r *http.Request) {
 
 // getBlogs returns all blogs
 func getBlogs(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	limiter := rate.NewLimiter(5, 10)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	if err := limiter.Wait(ctx); err != nil {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		handler.WriteError(w, http.StatusTooManyRequests, "Too many requests")
 		return
 	}
+
 	blogs, err := blogService.GetAllBlogs(ctx)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			handler.WriteError(w, http.StatusGatewayTimeout, "request timed out")
+			return
+		}
+		if errors.Is(err, context.Canceled) {
+			w.WriteHeader(499)
+			handler.WriteError(w, 499, "client canceled request")
+			return
+		}
 		handler.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -141,12 +209,11 @@ func getBlogs(w http.ResponseWriter, r *http.Request) {
 
 // getBlogByID returns a single blog by ID
 func getBlogByID(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	limiter := rate.NewLimiter(5, 10)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	if err := limiter.Wait(ctx); err != nil {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		handler.WriteError(w, http.StatusTooManyRequests, "Too many requests")
 		return
 	}
 	vars := mux.Vars(r)
@@ -158,6 +225,7 @@ func getBlogByID(w http.ResponseWriter, r *http.Request) {
 
 	blog, err := blogService.GetBlogByID(ctx, blogID)
 	if err != nil {
+		// service returns error when not found
 		handler.WriteError(w, http.StatusNotFound, "Blog not found")
 		return
 	}
@@ -189,17 +257,25 @@ func createBlog(w http.ResponseWriter, r *http.Request) {
 		Tags:    blogReq.Tags,
 	}
 
-	ctx := r.Context()
-
-	limiter := rate.NewLimiter(5, 10)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
 
 	if err := limiter.Wait(ctx); err != nil {
-		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		handler.WriteError(w, http.StatusTooManyRequests, "Too many requests")
 		return
 	}
 
 	id, err := blogService.CreateBlog(ctx, blog)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			handler.WriteError(w, http.StatusGatewayTimeout, "request timed out")
+			return
+		}
+		if errors.Is(err, context.Canceled) {
+			w.WriteHeader(499)
+			handler.WriteError(w, 499, "client canceled request")
+			return
+		}
 		handler.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
