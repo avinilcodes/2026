@@ -36,6 +36,9 @@ func init() {
 	blogService = service.NewBlogService()
 	profileService = service.NewProfileService()
 	homeService = service.NewHomeService()
+	if err := service.InitDefaultWorkerPool(5, 100); err != nil {
+		log.Fatalf("failed to initialize worker pool: %v", err)
+	}
 }
 
 func main() {
@@ -88,7 +91,7 @@ func main() {
 	}
 
 	// stop the worker pool, give it the same timeout
-	if err := service.ShutdownWorkerPool(shutdownCtx); err != nil {
+	if err := service.ShutdownDefaultPool(shutdownCtx); err != nil {
 		log.Printf("worker pool shutdown error: %v", err)
 	}
 
