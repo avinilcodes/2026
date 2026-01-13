@@ -119,8 +119,8 @@ func (bs *BlogService) GetBlogByID(ctx context.Context, id int) (*Blog, error) {
 // CreateBlog creates a new blog
 func (bs *BlogService) CreateBlog(ctx context.Context, blog Blog) (int, error) {
 	task := func(c context.Context) (interface{}, error) {
-		bs.mu.Lock()
-		defer bs.mu.Unlock()
+		bs.mu.Lock()         // Lock for writing
+		defer bs.mu.Unlock() // Unlock after writing
 		blog.ID = bs.nextID
 		bs.blogs[blog.ID] = blog
 		bs.nextID++
@@ -282,8 +282,8 @@ func NewHomeService() *HomeService {
 // GetHomeData returns home page data
 func (hs *HomeService) GetHomeData(ctx context.Context) (*Home, error) {
 	task := func(c context.Context) (interface{}, error) {
-		hs.mu.RLock()
-		defer hs.mu.RUnlock()
+		hs.mu.RLock()         // Read lock
+		defer hs.mu.RUnlock() // Unlock after reading
 		return &hs.home, nil
 	}
 	wp, err := GetDefaultPool()

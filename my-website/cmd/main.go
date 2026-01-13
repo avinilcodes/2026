@@ -27,6 +27,7 @@ var (
 	blogService    *service.BlogService
 	profileService *service.ProfileService
 	homeService    *service.HomeService
+	authManager    *service.AuthManager
 )
 
 // shared limiter for the server
@@ -36,6 +37,7 @@ func init() {
 	blogService = service.NewBlogService()
 	profileService = service.NewProfileService()
 	homeService = service.NewHomeService()
+	authManager = service.NewAuthManager()
 	if err := service.InitDefaultWorkerPool(5, 100); err != nil {
 		log.Fatalf("failed to initialize worker pool: %v", err)
 	}
@@ -44,6 +46,10 @@ func init() {
 func main() {
 	router := mux.NewRouter()
 
+	// per-client rate limiter (1 req/s, burst 5)
+	rl := handler.NewClientLimiter(rate.Limit(1), 5)
+	router.Use(handler.RateLimitMiddleware(rl))
+
 	// Routes
 	router.HandleFunc("/api/home", getHome).Methods(http.MethodGet)
 	router.HandleFunc("/api/profile", getProfile).Methods(http.MethodGet)
@@ -51,7 +57,11 @@ func main() {
 	router.HandleFunc("/api/blogs/{id}", getBlogByID).Methods(http.MethodGet)
 	router.HandleFunc("/api/blogs", createBlog).Methods(http.MethodPost)
 
-	// CORS configuration
+	// auth routes (simple examples)
+	router.HandleFunc("/api/auth/login", loginHandler).Methods(http.MethodPost)
+	router.HandleFunc("/api/auth/refresh", refreshHandler).Methods(http.MethodPost)
+
+	// CORS configuration - allow requests from localhost:4200 and any origin
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:4200", "*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -261,7 +271,7 @@ func createBlog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-	defer cancel()
+	defer cancel() // cancel() on function exit
 
 	if err := limiter.Wait(ctx); err != nil {
 		handler.WriteError(w, http.StatusTooManyRequests, "Too many requests")
@@ -288,4 +298,43 @@ func createBlog(w http.ResponseWriter, r *http.Request) {
 		"message": "Blog created successfully",
 	}
 	handler.WriteJSON(w, http.StatusCreated, response)
+}
+
+// loginHandler issues tokens for a given user(subject). This is a minimal example
+// In real apps, validate credentials first.
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		User string `json:"user"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		handler.WriteError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	access, refresh, err := authManager.IssueTokens(ctx, req.User)
+	if err != nil {
+		handler.WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	handler.WriteJSON(w, http.StatusOK, map[string]string{"access": access, "refresh": refresh})
+}
+
+// refreshHandler rotates refresh tokens and returns a new pair.
+func refreshHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Refresh string `json:"refresh"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		handler.WriteError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	access, refresh, err := authManager.RotateRefresh(ctx, req.Refresh)
+	if err != nil {
+		handler.WriteError(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	handler.WriteJSON(w, http.StatusOK, map[string]string{"access": access, "refresh": refresh})
 }
