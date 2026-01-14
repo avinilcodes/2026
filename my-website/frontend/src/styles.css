@@ -4,6 +4,11 @@
   box-sizing: border-box;
 }
 
+/* Bootstrap is loaded via CDN in index.html for development convenience.
+  To use a local install instead, run `npm install bootstrap` and
+  re-add an import to `node_modules/bootstrap/dist/css/bootstrap.min.css`.
+*/
+
 html,
 body {
   height: 100%;
@@ -29,4 +34,9 @@ a {
 
 a:hover {
   color: #0056b3;
+}
+
+/* Small tweaks to preserve original look where useful */
+.logo {
+  font-weight: 700;
 }
